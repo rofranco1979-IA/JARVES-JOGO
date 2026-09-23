@@ -1,0 +1,223 @@
+name: Gerar Modelo 3D JARVES V4.1 AJUSTE FINO
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-model:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar projeto
+        uses: actions/checkout@v4
+
+      - name: Instalar Blender e NumPy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender python3-numpy
+          BLENDER_PY="$(blender -b --python-expr "import sys; print(sys.executable)" 2>/dev/null | grep -E '^/' | tail -n 1)"
+          echo "Python Blender: $BLENDER_PY"
+          "$BLENDER_PY" -m ensurepip --upgrade || true
+          "$BLENDER_PY" -m pip install --upgrade numpy
+          "$BLENDER_PY" -c "import numpy; print('NumPy OK', numpy.__version__)"
+
+      - name: Criar modelo JARVES V2
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/modelo3d"
+          cat > /tmp/jarves_v4_1.py <<'PY'
+          import bpy, math, os
+          from mathutils import Matrix
+
+          bpy.ops.object.select_all(action='SELECT')
+          bpy.ops.object.delete(use_global=False)
+
+          def material(name, rgb, metallic=0.0, rough=.3, emission=False):
+              m=bpy.data.materials.new(name)
+              m.diffuse_color=(*rgb,1)
+              m.use_nodes=True
+              bs=m.node_tree.nodes.get("Principled BSDF")
+              bs.inputs["Base Color"].default_value=(*rgb,1)
+              bs.inputs["Metallic"].default_value=metallic
+              bs.inputs["Roughness"].default_value=rough
+              if emission:
+                  for key in ("Emission Color","Emission"):
+                      if key in bs.inputs:
+                          bs.inputs[key].default_value=(*rgb,1)
+                  if "Emission Strength" in bs.inputs:
+                      bs.inputs["Emission Strength"].default_value=4
+              return m
+
+          WHITE=material("Armadura branca",(0.78,.86,.92),.65,.2)
+          BLACK=material("Visor preto",(.008,.015,.025),.75,.12)
+          DARK=material("Juntas",(.025,.045,.065),.7,.25)
+          CYAN=material("Luzes cyan",(0,.45,1),.25,.12,True)
+
+          def cube(n,loc,sc,mat,bev=.10):
+              bpy.ops.mesh.primitive_cube_add(size=1,location=loc)
+              o=bpy.context.object; o.name=n; o.scale=sc
+              bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
+              if bev:
+                  md=o.modifiers.new("Arredondado","BEVEL"); md.width=bev; md.segments=3
+                  bpy.context.view_layer.objects.active=o
+                  bpy.ops.object.modifier_apply(modifier=md.name)
+              o.data.materials.append(mat); return o
+
+          def sph(n,loc,sc,mat):
+              bpy.ops.mesh.primitive_uv_sphere_add(segments=24,ring_count=12,location=loc)
+              o=bpy.context.object; o.name=n; o.scale=sc
+              bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
+              o.data.materials.append(mat); return o
+
+          def cyl(n,loc,r,d,mat,rot=(0,0,0)):
+              bpy.ops.mesh.primitive_cylinder_add(vertices=24,radius=r,depth=d,location=loc,rotation=rot)
+              o=bpy.context.object; o.name=n; o.data.materials.append(mat); return o
+
+          def taper(n,loc,r1,r2,d,mat,rot=(0,0,0)):
+              # Braco V4.1: um unico segmento afunilado, mais largo no ombro e fino na mao.
+              bpy.ops.mesh.primitive_cone_add(vertices=24,radius1=r1,radius2=r2,depth=d,location=loc,rotation=rot)
+              o=bpy.context.object; o.name=n; o.data.materials.append(mat); return o
+
+          def claw(prefix,x,loc,mat):
+              # Mao tipo alicate: palma compacta + duas garras curvas/anguladas.
+              px,py,pz=loc
+              parts[prefix+"Palm"]=sph(prefix+"Palm",(px,py,pz),(.14,.13,.14),DARK)
+              parts[prefix+"ClawTop"]=cube(prefix+"ClawTop",(px+.10*x,py-.01,pz+.095),(.13,.065,.055),mat,.04)
+              parts[prefix+"ClawBottom"]=cube(prefix+"ClawBottom",(px+.10*x,py-.01,pz-.095),(.13,.065,.055),mat,.04)
+              parts[prefix+"TipTop"]=cube(prefix+"TipTop",(px+.205*x,py-.01,pz+.055),(.055,.065,.085),mat,.035)
+              parts[prefix+"TipBottom"]=cube(prefix+"TipBottom",(px+.205*x,py-.01,pz-.055),(.055,.065,.085),mat,.035)
+
+          # Rig
+          bpy.ops.object.armature_add(enter_editmode=True, location=(0,0,0))
+          rig=bpy.context.object; rig.name="JARVES_Rig"
+          eb=rig.data.edit_bones
+          root=eb[0]; root.name="Root"; root.head=(0,0,-1.0); root.tail=(0,0,.7)
+
+          def bone(n,h,t,p):
+              b=eb.new(n); b.head=h; b.tail=t; b.parent=p; return b
+
+          spine=bone("Spine",(0,0,.65),(0,0,2.30),root)
+          head=bone("Head",(0,0,2.30),(0,0,3.20),spine)
+          ual=bone("UpperArm.L",(-.72,0,2.05),(-1.08,0,1.72),spine)
+          fal=bone("Forearm.L",(-1.08,0,1.72),(-1.42,0,1.22),ual)
+          uar=bone("UpperArm.R",(.72,0,2.05),(1.08,0,1.72),spine)
+          far=bone("Forearm.R",(1.08,0,1.72),(1.42,0,1.22),uar)
+          thl=bone("Thigh.L",(-.34,0,.68),(-.34,0,.05),root)
+          shl=bone("Shin.L",(-.34,0,.05),(-.34,0,-.75),thl)
+          thr=bone("Thigh.R",(.34,0,.68),(.34,0,.05),root)
+          shr=bone("Shin.R",(.34,0,.05),(.34,0,-.75),thr)
+          bpy.ops.object.mode_set(mode='OBJECT')
+
+          # Robot in assembled world-space pose
+          parts={}
+          parts["Torso"]=cube("Torso",(0,0,1.48),(.80,.43,.72),WHITE,.22)
+          parts["Pelvis"]=cube("Pelvis",(0,0,.73),(.62,.36,.35),WHITE,.16)
+          parts["ChestCore"]=sph("ChestCore",(0,-.44,1.55),(.21,.055,.21),CYAN)
+          parts["Neck"]=cyl("Neck",(0,0,1.94),.17,.22,DARK)
+          parts["HeadShell"]=cube("HeadShell",(0,0,2.30),(.70,.43,.50),WHITE,.23)
+          parts["Visor"]=cube("Visor",(0,-.425,2.34),(.55,.050,.27),BLACK,.13)
+          parts["Eye.L"]=sph("Eye.L",(-.22,-.485,2.38),(.085,.025,.055),CYAN)
+          parts["Eye.R"]=sph("Eye.R",(.22,-.485,2.38),(.085,.025,.055),CYAN)
+
+          # V4.1: mantem o corpo da V4 e redesenha somente os bracos.
+          # Sai o conjunto de dois cilindros. Entra um unico segmento afunilado + mao alicate.
+          for x,s in [(-1,"L"),(1,"R")]:
+              parts["Shoulder."+s]=sph("Shoulder."+s,(.78*x,0,1.82),(.20,.20,.20),DARK)
+              parts["UpperArm."+s]=taper("UpperArm."+s,(.99*x,0,1.48),.115,.175,.72,WHITE,
+                                        (0,math.radians(35*x),0))
+              parts["Elbow."+s]=sph("Elbow."+s,(1.18*x,0,1.19),(.13,.13,.13),CYAN)
+              claw("Claw."+s+".",x,(1.29*x,0,1.02),WHITE)
+
+          for x,s in [(-.34,"L"),(.34,"R")]:
+              parts["Hip."+s]=sph("Hip."+s,(x,0,.52),(.20,.20,.20),DARK)
+              parts["Thigh."+s]=cyl("Thigh."+s,(x,0,.20),.20,.58,WHITE)
+              parts["Knee."+s]=sph("Knee."+s,(x,-.02,-.10),(.17,.17,.17),CYAN)
+              parts["Shin."+s]=cyl("Shin."+s,(x,0,-.39),.19,.58,WHITE)
+              parts["Foot."+s]=cube("Foot."+s,(x,-.12,-.72),(.28,.42,.15),WHITE,.12)
+
+          # Antennas/head details
+          for x,s in [(-.43,"L"),(.43,"R")]:
+              parts["Antenna."+s]=cyl("Antenna."+s,(x,0,2.83),.045,.28,DARK)
+              parts["AntennaLight."+s]=sph("AntennaLight."+s,(x,0,3.00),(.085,.085,.085),CYAN)
+
+          # V4 - placas e detalhes visuais para aproximar o prototipo do JARVES
+          parts["ChestPlate"]=cube("ChestPlate",(0,-.445,1.47),(.56,.055,.43),WHITE,.12)
+          parts["Waist"]=cyl("Waist",(0,0,.96),.31,.20,DARK)
+          parts["Brow"]=cube("Brow",(0,-.482,2.55),(.47,.035,.055),DARK,.04)
+          parts["Chin"]=cube("Chin",(0,-.39,2.00),(.32,.25,.10),WHITE,.08)
+
+          for x,side in [(-1,"L"),(1,"R")]:
+              parts["ShoulderArmor."+side]=cube("ShoulderArmor."+side,(.76*x,-.01,1.83),(.21,.27,.22),WHITE,.11)
+              parts["KneeArmor."+side]=cube("KneeArmor."+side,(.34*x,-.17,-.10),(.20,.10,.17),WHITE,.08)
+
+          # Critical V2 fix: bone-parent while preserving exact world transform.
+          mapping = {
+              "HeadShell":"Head","Visor":"Head","Eye.L":"Head","Eye.R":"Head",
+              "Antenna.L":"Head","Antenna.R":"Head","AntennaLight.L":"Head","AntennaLight.R":"Head",
+              "UpperArm.L":"UpperArm.L","Elbow.L":"Forearm.L",
+              "Claw.L.Palm":"Forearm.L","Claw.L.ClawTop":"Forearm.L","Claw.L.ClawBottom":"Forearm.L","Claw.L.TipTop":"Forearm.L","Claw.L.TipBottom":"Forearm.L",
+              "UpperArm.R":"UpperArm.R","Elbow.R":"Forearm.R",
+              "Claw.R.Palm":"Forearm.R","Claw.R.ClawTop":"Forearm.R","Claw.R.ClawBottom":"Forearm.R","Claw.R.TipTop":"Forearm.R","Claw.R.TipBottom":"Forearm.R",
+              "Thigh.L":"Thigh.L","Knee.L":"Thigh.L","Shin.L":"Shin.L","Foot.L":"Shin.L",
+              "Thigh.R":"Thigh.R","Knee.R":"Thigh.R","Shin.R":"Shin.R","Foot.R":"Shin.R",
+              "Torso":"Spine","Pelvis":"Root","ChestCore":"Spine","Neck":"Spine",
+              "Shoulder.L":"Spine","Shoulder.R":"Spine",
+              "ChestPlate":"Spine","Waist":"Root","Brow":"Head","Chin":"Head",
+              "ShoulderArmor.L":"Spine","ShoulderArmor.R":"Spine",
+              "KneeArmor.L":"Thigh.L","KneeArmor.R":"Thigh.R"
+          }
+
+          bpy.context.view_layer.update()
+          for objname,bname in mapping.items():
+              o=parts[objname]
+              world=o.matrix_world.copy()
+              o.parent=rig
+              o.parent_type='BONE'
+              o.parent_bone=bname
+              bpy.context.view_layer.update()
+              o.matrix_world=world
+
+          # Animations
+          rig.animation_data_create()
+          idle=bpy.data.actions.new("Idle")
+          rig.animation_data.action=idle
+          ph=rig.pose.bones["Head"]; ph.rotation_mode='XYZ'
+          for f,a in [(1,0),(30,.08),(60,0),(90,-.08),(120,0)]:
+              ph.rotation_euler[2]=a
+              ph.keyframe_insert("rotation_euler",frame=f)
+
+          wave=bpy.data.actions.new("Wave")
+          rig.animation_data.action=wave
+          ua=rig.pose.bones["UpperArm.R"]; ua.rotation_mode='XYZ'
+          fa=rig.pose.bones["Forearm.R"]; fa.rotation_mode='XYZ'
+          for f,a,b in [(1,0,0),(10,-.9,.5),(20,-.9,-.5),(30,-.9,.5),(40,-.9,-.5),(55,0,0)]:
+              ua.rotation_euler[1]=a
+              fa.rotation_euler[2]=b
+              ua.keyframe_insert("rotation_euler",frame=f)
+              fa.keyframe_insert("rotation_euler",frame=f)
+
+          # Keep actions through NLA so both are exported.
+          rig.animation_data.action=None
+          for act in (idle,wave):
+              tr=rig.animation_data.nla_tracks.new(); tr.name=act.name
+              tr.strips.new(act.name, int(act.frame_range[0]), act)
+
+          out=os.path.join(os.environ["GITHUB_WORKSPACE"],"modelo3d","jarves_v4_1.glb")
+          bpy.ops.object.select_all(action='SELECT')
+          bpy.ops.export_scene.gltf(filepath=out,export_format='GLB',export_animations=True,export_apply=True)
+          print("JARVES V4.1 AJUSTE FINO CRIADO:",out)
+          PY
+
+      - name: Gerar GLB V4.1
+        run: |
+          blender -b --python /tmp/jarves_v4_1.py 2>&1 | tee "$GITHUB_WORKSPACE/modelo3d/blender-v4-1.log"
+
+      - name: Verificar GLB V4.1
+        run: |
+          ls -lh "$GITHUB_WORKSPACE/modelo3d/jarves_v4_1.glb"
+          test -s "$GITHUB_WORKSPACE/modelo3d/jarves_v4_1.glb"
+
+      - name: Publicar JARVES 3D V4.1
+        uses: actions/upload-artifact@v4
+        with:
+          name: JARVES-3D-V4-1-GLB
+          path: modelo3d/jarves_v4_1.glb
+          retention-days: 30
