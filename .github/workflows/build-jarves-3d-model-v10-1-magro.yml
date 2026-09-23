@@ -1,0 +1,238 @@
+name: Gerar Modelo 3D JARVES V10.1 Magro
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-model:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar projeto
+        uses: actions/checkout@v4
+
+      - name: Instalar Blender e NumPy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender python3-numpy
+          BLENDER_PY="$(blender -b --python-expr "import sys; print(sys.executable)" 2>/dev/null | grep -E '^/' | tail -n 1)"
+          echo "Python Blender: $BLENDER_PY"
+          "$BLENDER_PY" -m ensurepip --upgrade || true
+          "$BLENDER_PY" -m pip install --upgrade numpy
+          "$BLENDER_PY" -c "import numpy; print('NumPy OK', numpy.__version__)"
+
+      - name: Criar modelo JARVES V2
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/modelo3d"
+          cat > /tmp/jarves_v10_1.py <<'PY'
+          import bpy, math, os
+          from mathutils import Matrix
+
+          bpy.ops.object.select_all(action='SELECT')
+          bpy.ops.object.delete(use_global=False)
+
+          def material(name, rgb, metallic=0.0, rough=.3, emission=False):
+              m=bpy.data.materials.new(name)
+              m.diffuse_color=(*rgb,1)
+              m.use_nodes=True
+              bs=m.node_tree.nodes.get("Principled BSDF")
+              bs.inputs["Base Color"].default_value=(*rgb,1)
+              bs.inputs["Metallic"].default_value=metallic
+              bs.inputs["Roughness"].default_value=rough
+              if emission:
+                  for key in ("Emission Color","Emission"):
+                      if key in bs.inputs:
+                          bs.inputs[key].default_value=(*rgb,1)
+                  if "Emission Strength" in bs.inputs:
+                      bs.inputs["Emission Strength"].default_value=4
+              return m
+
+          WHITE=material("Armadura branca",(0.78,.86,.92),.65,.2)
+          BLACK=material("Visor preto",(.008,.015,.025),.75,.12)
+          DARK=material("Juntas",(.025,.045,.065),.7,.25)
+          CYAN=material("Luzes cyan",(0,.45,1),.25,.12,True)
+
+          def cube(n,loc,sc,mat,bev=.10):
+              bpy.ops.mesh.primitive_cube_add(size=1,location=loc)
+              o=bpy.context.object; o.name=n; o.scale=sc
+              bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
+              if bev:
+                  md=o.modifiers.new("Arredondado","BEVEL"); md.width=bev; md.segments=3
+                  bpy.context.view_layer.objects.active=o
+                  bpy.ops.object.modifier_apply(modifier=md.name)
+              o.data.materials.append(mat); return o
+
+          def sph(n,loc,sc,mat):
+              bpy.ops.mesh.primitive_uv_sphere_add(segments=24,ring_count=12,location=loc)
+              o=bpy.context.object; o.name=n; o.scale=sc
+              bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
+              o.data.materials.append(mat); return o
+
+          def cyl(n,loc,r,d,mat,rot=(0,0,0)):
+              bpy.ops.mesh.primitive_cylinder_add(vertices=24,radius=r,depth=d,location=loc,rotation=rot)
+              o=bpy.context.object; o.name=n; o.data.materials.append(mat); return o
+
+          # Rig
+          bpy.ops.object.armature_add(enter_editmode=True, location=(0,0,0))
+          rig=bpy.context.object; rig.name="JARVES_Rig"
+          eb=rig.data.edit_bones
+          root=eb[0]; root.name="Root"; root.head=(0,0,-1.0); root.tail=(0,0,.7)
+
+          def bone(n,h,t,p):
+              b=eb.new(n); b.head=h; b.tail=t; b.parent=p; return b
+
+          spine=bone("Spine",(0,0,.65),(0,0,2.30),root)
+          head=bone("Head",(0,0,2.30),(0,0,3.20),spine)
+          ual=bone("UpperArm.L",(-.72,0,2.05),(-1.08,0,1.72),spine)
+          fal=bone("Forearm.L",(-1.08,0,1.72),(-1.42,0,1.22),ual)
+          uar=bone("UpperArm.R",(.72,0,2.05),(1.08,0,1.72),spine)
+          far=bone("Forearm.R",(1.08,0,1.72),(1.42,0,1.22),uar)
+          thl=bone("Thigh.L",(-.34,0,.68),(-.34,0,.05),root)
+          shl=bone("Shin.L",(-.34,0,.05),(-.34,0,-.75),thl)
+          thr=bone("Thigh.R",(.34,0,.68),(.34,0,.05),root)
+          shr=bone("Shin.R",(.34,0,.05),(.34,0,-.75),thr)
+          bpy.ops.object.mode_set(mode='OBJECT')
+
+          # Robot in assembled world-space pose
+          parts={}
+          parts["Torso"]=cube("Torso",(0,0,1.35),(.54,.34,.58),WHITE,.20)
+          parts["Pelvis"]=cube("Pelvis",(0,0,.72),(.40,.27,.27),WHITE,.14)
+          parts["ChestCore"]=sph("ChestCore",(0,-.395,1.43),(.18,.050,.18),CYAN)
+          parts["Neck"]=cyl("Neck",(0,0,1.78),.16,.20,DARK)
+          parts["HeadShell"]=cube("HeadShell",(0,0,2.18),(.58,.38,.44),WHITE,.21)
+          parts["Visor"]=cube("Visor",(0,-.425,2.18),(.55,.045,.23),BLACK,.13)
+          parts["Eye.L"]=sph("Eye.L",(-.22,-.480,2.20),(.085,.025,.055),CYAN)
+          parts["Eye.R"]=sph("Eye.R",(.22,-.480,2.20),(.085,.025,.055),CYAN)
+
+          for x,s in [(-1,"L"),(1,"R")]:
+              parts["Shoulder."+s]=sph("Shoulder."+s,(.67*x,0,1.61),(.13,.13,.13),DARK)
+              parts["UpperArm."+s]=cyl("UpperArm."+s,(.82*x,0,1.39),.13,.46,WHITE,
+                                      (0,math.radians(42*x),0))
+              parts["Elbow."+s]=sph("Elbow."+s,(.97*x,0,1.18),(.15,.15,.15),CYAN)
+              parts["Forearm."+s]=cyl("Forearm."+s,(1.02*x,0,.98),.125,.42,WHITE,
+                                      (0,math.radians(28*x),0))
+              parts["Hand."+s]=sph("Hand."+s,(1.08*x,0,.76),(.105,.115,.125),DARK)
+              parts["PincerA."+s]=cube("PincerA."+s,(1.10*x,-.065,.60),(.050,.045,.145),WHITE,.025)
+              parts["PincerB."+s]=cube("PincerB."+s,(1.10*x,.065,.60),(.050,.045,.145),WHITE,.025)
+
+          for x,s in [(-.34,"L"),(.34,"R")]:
+              parts["Hip."+s]=sph("Hip."+s,(x,0,.49),(.20,.20,.20),DARK)
+              parts["Thigh."+s]=cyl("Thigh."+s,(x,0,.16),.20,.58,WHITE)
+              parts["Knee."+s]=sph("Knee."+s,(x,-.02,-.08),(.17,.17,.17),CYAN)
+              parts["Shin."+s]=cyl("Shin."+s,(x,0,-.33),.19,.58,WHITE)
+              parts["Foot."+s]=cube("Foot."+s,(x,-.12,-.62),(.28,.42,.15),WHITE,.12)
+
+          # Antennas/head details
+          for x,s in [(-.43,"L"),(.43,"R")]:
+              parts["Antenna."+s]=cyl("Antenna."+s,(x,0,2.63),.035,.24,DARK)
+              parts["AntennaLight."+s]=sph("AntennaLight."+s,(x,0,2.77),(.085,.085,.085),CYAN)
+
+          # V7 - casca visual limpa, sem barras/placas acumuladas
+          # Cabeça: casco oval + visor único + bases discretas das antenas
+          parts["HeadCap"]=sph("HeadCap",(0,.03,2.20),(.59,.39,.45),WHITE)
+          parts["FaceVisor"]=cube("FaceVisor",(0,-.438,2.19),(.46,.045,.20),BLACK,.14)
+          parts["AntennaBase.L"]=sph("AntennaBase.L",(-.34,0,2.56),(.045,.045,.045),DARK)
+          parts["AntennaBase.R"]=sph("AntennaBase.R",(.34,0,2.56),(.045,.045,.045),DARK)
+
+          # Tronco: peito arredondado, placa central e cintura pequena
+          parts["ChestShell"]=sph("ChestShell",(0,.02,1.37),(.56,.35,.58),WHITE)
+          parts["ChestPanel"]=cube("ChestPanel",(0,-.405,1.39),(.43,.045,.32),WHITE,.16)
+          parts["WaistShell"]=sph("WaistShell",(0,0,.82),(.35,.25,.23),DARK)
+
+          # Ombros/brasos: carenagens menores, juntas escondidas
+          for x,side in [(-1,"L"),(1,"R")]:
+              parts["ShoulderShell."+side]=sph("ShoulderShell."+side,(.67*x,0,1.61),(.22,.25,.24),WHITE)
+              parts["UpperArmShell."+side]=cube("UpperArmShell."+side,(.82*x,0,1.38),(.17,.20,.27),WHITE,.12)
+              parts["ElbowCover."+side]=sph("ElbowCover."+side,(.97*x,0,1.18),(.14,.15,.14),DARK)
+              parts["ForearmShell."+side]=cube("ForearmShell."+side,(1.02*x,0,.98),(.16,.20,.25),WHITE,.11)
+              parts["HandShell."+side]=sph("HandShell."+side,(1.08*x,0,.76),(.11,.12,.13),WHITE)
+
+          # Quadril/pernas: mais curtas, placas frontais e pes compactos
+          for x,side in [(-.34,"L"),(.34,"R")]:
+              parts["HipShell."+side]=sph("HipShell."+side,(x,0,.49),(.20,.20,.20),WHITE)
+              parts["ThighShell."+side]=cube("ThighShell."+side,(x,0,.16),(.20,.22,.30),WHITE,.13)
+              parts["KneeShell."+side]=sph("KneeShell."+side,(x,-.02,-.08),(.16,.16,.15),DARK)
+              parts["ShinShell."+side]=cube("ShinShell."+side,(x,0,-.34),(.19,.21,.28),WHITE,.12)
+              parts["FootShell."+side]=cube("FootShell."+side,(x,-.10,-.62),(.25,.34,.13),WHITE,.10)
+
+          # Critical V2 fix: bone-parent while preserving exact world transform.
+          mapping = {
+              "HeadShell":"Head","Visor":"Head","Eye.L":"Head","Eye.R":"Head",
+              "Antenna.L":"Head","Antenna.R":"Head","AntennaLight.L":"Head","AntennaLight.R":"Head",
+              "UpperArm.L":"UpperArm.L","Elbow.L":"UpperArm.L","Forearm.L":"Forearm.L","Hand.L":"Forearm.L",
+              "UpperArm.R":"UpperArm.R","Elbow.R":"UpperArm.R","Forearm.R":"Forearm.R","Hand.R":"Forearm.R",
+              "Thigh.L":"Thigh.L","Knee.L":"Thigh.L","Shin.L":"Shin.L","Foot.L":"Shin.L",
+              "Thigh.R":"Thigh.R","Knee.R":"Thigh.R","Shin.R":"Shin.R","Foot.R":"Shin.R",
+              "Torso":"Spine","Pelvis":"Root","ChestCore":"Spine","Neck":"Spine",
+              "Shoulder.L":"Spine","Shoulder.R":"Spine",
+              "HeadCap":"Head","FaceVisor":"Head","AntennaBase.L":"Head","AntennaBase.R":"Head",
+              "ChestShell":"Spine","ChestPanel":"Spine","WaistShell":"Root",
+              "ShoulderShell.L":"Spine","ShoulderShell.R":"Spine",
+              "UpperArmShell.L":"UpperArm.L","UpperArmShell.R":"UpperArm.R",
+              "ElbowCover.L":"UpperArm.L","ElbowCover.R":"UpperArm.R",
+              "ForearmShell.L":"Forearm.L","ForearmShell.R":"Forearm.R",
+              "HandShell.L":"Forearm.L","HandShell.R":"Forearm.R",
+              "PincerA.L":"Forearm.L","PincerA.R":"Forearm.R",
+              "PincerB.L":"Forearm.L","PincerB.R":"Forearm.R",
+              "HipShell.L":"Root","HipShell.R":"Root",
+              "ThighShell.L":"Thigh.L","ThighShell.R":"Thigh.R",
+              "KneeShell.L":"Thigh.L","KneeShell.R":"Thigh.R",
+              "ShinShell.L":"Shin.L","ShinShell.R":"Shin.R",
+              "FootShell.L":"Shin.L","FootShell.R":"Shin.R"
+          }
+
+          bpy.context.view_layer.update()
+          for objname,bname in mapping.items():
+              o=parts[objname]
+              world=o.matrix_world.copy()
+              o.parent=rig
+              o.parent_type='BONE'
+              o.parent_bone=bname
+              bpy.context.view_layer.update()
+              o.matrix_world=world
+
+          # Animations
+          rig.animation_data_create()
+          idle=bpy.data.actions.new("Idle")
+          rig.animation_data.action=idle
+          ph=rig.pose.bones["Head"]; ph.rotation_mode='XYZ'
+          for f,a in [(1,0),(30,.08),(60,0),(90,-.08),(120,0)]:
+              ph.rotation_euler[2]=a
+              ph.keyframe_insert("rotation_euler",frame=f)
+
+          wave=bpy.data.actions.new("Wave")
+          rig.animation_data.action=wave
+          ua=rig.pose.bones["UpperArm.R"]; ua.rotation_mode='XYZ'
+          fa=rig.pose.bones["Forearm.R"]; fa.rotation_mode='XYZ'
+          for f,a,b in [(1,0,0),(10,-.9,.5),(20,-.9,-.5),(30,-.9,.5),(40,-.9,-.5),(55,0,0)]:
+              ua.rotation_euler[1]=a
+              fa.rotation_euler[2]=b
+              ua.keyframe_insert("rotation_euler",frame=f)
+              fa.keyframe_insert("rotation_euler",frame=f)
+
+          # Keep actions through NLA so both are exported.
+          rig.animation_data.action=None
+          for act in (idle,wave):
+              tr=rig.animation_data.nla_tracks.new(); tr.name=act.name
+              tr.strips.new(act.name, int(act.frame_range[0]), act)
+
+          out=os.path.join(os.environ["GITHUB_WORKSPACE"],"modelo3d","jarves_v10_1_magro.glb")
+          bpy.ops.object.select_all(action='SELECT')
+          bpy.ops.export_scene.gltf(filepath=out,export_format='GLB',export_animations=True,export_apply=True)
+          print("JARVES V10.1 MAGRO CRIADO:",out)
+          PY
+
+      - name: Gerar GLB V10.1
+        run: |
+          blender -b --python /tmp/jarves_v10_1.py 2>&1 | tee "$GITHUB_WORKSPACE/modelo3d/blender-v10-1.log"
+
+      - name: Verificar GLB V10.1
+        run: |
+          ls -lh "$GITHUB_WORKSPACE/modelo3d/jarves_v10_1_magro.glb"
+          test -s "$GITHUB_WORKSPACE/modelo3d/jarves_v10_1_magro.glb"
+
+      - name: Publicar JARVES 3D V10.1
+        uses: actions/upload-artifact@v4
+        with:
+          name: JARVES-3D-V10-1-MAGRO-GLB
+          path: modelo3d/jarves_v10_1_magro.glb
+          retention-days: 30
