@@ -1,0 +1,146 @@
+name: Gerar Modelo 3D JARVES V10.7.6
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-model:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender python3-numpy
+          BLENDER_PY="/usr/bin/4.0/python/bin/python3.12"
+          if [ -x "$BLENDER_PY" ]; then
+            "$BLENDER_PY" -m ensurepip --upgrade || true
+            "$BLENDER_PY" -m pip install --upgrade numpy
+          else
+            python3 -m pip install --user --upgrade numpy
+          fi
+
+      - name: Criar script Blender
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/modelo3d"
+          cat > "$GITHUB_WORKSPACE/jarves_v10_7_6.py" <<'PY'
+          import bpy
+          import math
+          import os
+
+          bpy.ops.object.select_all(action='SELECT')
+          bpy.ops.object.delete(use_global=False)
+
+          def mat(nome, cor, metal=.4, rough=.22):
+              m=bpy.data.materials.new(nome)
+              m.diffuse_color=(*cor,1)
+              m.use_nodes=True
+              p=m.node_tree.nodes.get("Principled BSDF")
+              p.inputs["Base Color"].default_value=(*cor,1)
+              p.inputs["Metallic"].default_value=metal
+              p.inputs["Roughness"].default_value=rough
+              return m
+
+          W=mat("Branco",(.82,.88,.92),.55,.18)
+          D=mat("Juntas",(.025,.04,.055),.70,.20)
+          B=mat("Visor",(.008,.015,.022),.72,.12)
+          C=mat("Cyan",(0,.55,.95),.25,.12)
+
+          def cube(n,l,s,m,b=.06):
+              bpy.ops.mesh.primitive_cube_add(size=1,location=l)
+              o=bpy.context.object
+              o.name=n
+              o.scale=s
+              bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
+              if b:
+                  md=o.modifiers.new("Round","BEVEL")
+                  md.width=b
+                  md.segments=3
+                  bpy.context.view_layer.objects.active=o
+                  bpy.ops.object.modifier_apply(modifier=md.name)
+              o.data.materials.append(m)
+
+          def sph(n,l,s,m):
+              bpy.ops.mesh.primitive_uv_sphere_add(segments=20,ring_count=10,location=l)
+              o=bpy.context.object
+              o.name=n
+              o.scale=s
+              bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
+              o.data.materials.append(m)
+
+          def cyl(n,l,rad,dep,m,r=(0,0,0)):
+              bpy.ops.mesh.primitive_cylinder_add(vertices=20,radius=rad,depth=dep,location=l,rotation=r)
+              o=bpy.context.object
+              o.name=n
+              o.data.materials.append(m)
+
+          cube("Head",(0,0,2.42),(.54,.34,.35),W,.18)
+          cube("Visor",(0,-.345,2.43),(.43,.035,.16),B,.08)
+          sph("EyeL",(-.19,-.385,2.44),(.065,.025,.065),C)
+          sph("EyeR",(.19,-.385,2.44),(.065,.025,.065),C)
+
+          for x in (-1,1):
+              cyl("Ear",(.565*x,0,2.43),.065,.055,D,(0,math.radians(90),0))
+              cyl("Antenna",(.32*x,0,2.85),.026,.22,D)
+              sph("AntennaLight",(.32*x,0,2.99),(.065,.065,.065),C)
+
+          cyl("Neck",(0,0,1.98),.11,.16,D)
+          cube("Torso",(0,0,1.52),(.37,.25,.55),W,.15)
+          sph("Core",(0,-.295,1.55),(.10,.025,.20),C)
+          cube("Waist",(0,0,.96),(.27,.21,.10),D,.05)
+
+          for x in (-1,1):
+              sph("Shoulder",(.49*x,0,1.70),(.15,.15,.15),W)
+              cyl("UpperArm",(.58*x,0,1.39),.09,.40,W)
+              sph("Elbow",(.58*x,0,1.14),(.10,.10,.10),C)
+              cyl("Forearm",(.58*x,0,.89),.095,.36,W)
+              cube("Palm",(.58*x,0,.62),(.09,.085,.10),D,.035)
+              cube("ClawA",(.58*x,-.075,.43),(.05,.04,.18),W,.03)
+              cube("ClawB",(.58*x,.075,.43),(.05,.04,.18),W,.03)
+
+          cube("Pelvis",(0,0,.76),(.25,.20,.17),W,.08)
+          for x in (-1,1):
+              sph("Hip",(.20*x,0,.57),(.12,.12,.12),D)
+              cyl("Thigh",(.20*x,0,.29),.12,.42,W)
+              cyl("Knee",(.20*x,0,.03),.135,.18,C,(0,math.radians(90),0))
+              cyl("Shin",(.20*x,0,-.27),.12,.48,W)
+              cube("Foot",(.20*x,-.06,-.57),(.15,.22,.09),W,.04)
+
+          out=os.path.abspath(os.path.join(os.environ["GITHUB_WORKSPACE"],"modelo3d","jarves_v10_7_6.glb"))
+          os.makedirs(os.path.dirname(out),exist_ok=True)
+          print("EXPORTANDO PARA:",out)
+          bpy.ops.object.select_all(action='SELECT')
+          result=bpy.ops.export_scene.gltf(filepath=out,export_format='GLB',export_animations=False,export_apply=True)
+          print("RESULTADO EXPORT:",result)
+          if not os.path.exists(out):
+              raise RuntimeError("GLB NAO EXISTE: "+out)
+          if os.path.getsize(out)==0:
+              raise RuntimeError("GLB VAZIO: "+out)
+          print("GLB CRIADO:",out,os.path.getsize(out),"bytes")
+          PY
+
+      - name: Mostrar script
+        run: |
+          wc -l "$GITHUB_WORKSPACE/jarves_v10_7_6.py"
+          head -n 5 "$GITHUB_WORKSPACE/jarves_v10_7_6.py"
+
+      - name: Gerar GLB
+        run: |
+          set -euxo pipefail
+          blender -b --python "$GITHUB_WORKSPACE/jarves_v10_7_6.py"
+          find "$GITHUB_WORKSPACE" -maxdepth 3 -type f -name '*.glb' -ls
+
+      - name: Verificar GLB
+        run: |
+          set -euxo pipefail
+          FILE="$GITHUB_WORKSPACE/modelo3d/jarves_v10_7_6.glb"
+          ls -lh "$FILE"
+          test -s "$FILE"
+
+      - name: Publicar GLB
+        uses: actions/upload-artifact@v4
+        with:
+          name: JARVES-3D-V10-7-6-GLB
+          path: modelo3d/jarves_v10_7_6.glb
+          if-no-files-found: error
