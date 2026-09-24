@@ -1,0 +1,253 @@
+name: Gerar Modelo 3D JARVES V10.9.1 REACOES
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-model:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender python3-numpy
+          BLENDER_PY="/usr/bin/4.0/python/bin/python3.12"
+          if [ -x "$BLENDER_PY" ]; then
+            "$BLENDER_PY" -m ensurepip --upgrade || true
+            "$BLENDER_PY" -m pip install --upgrade numpy
+          fi
+
+      - name: Construir JARVES
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/modelo3d"
+          cat > /tmp/jarves_v1091.py <<'PY'
+          import bpy, math, os
+          from mathutils import Vector
+
+          bpy.ops.object.select_all(action='SELECT')
+          bpy.ops.object.delete(use_global=False)
+
+          def material(nome, cor, metal=.45, rough=.18):
+              m=bpy.data.materials.new(nome)
+              m.diffuse_color=(*cor,1)
+              m.use_nodes=True
+              p=m.node_tree.nodes.get("Principled BSDF")
+              p.inputs["Base Color"].default_value=(*cor,1)
+              p.inputs["Metallic"].default_value=metal
+              p.inputs["Roughness"].default_value=rough
+              return m
+
+          WHITE=material("Armadura branca",(.80,.87,.92),.58,.16)
+          DARK=material("Juntas",(.018,.03,.045),.75,.15)
+          BLACK=material("Visor",(.004,.009,.016),.80,.09)
+          CYAN=material("Luzes cyan",(0,.55,1.0),.30,.10)
+
+          def cube(n,loc,scale,mat,bev=.05):
+              bpy.ops.mesh.primitive_cube_add(size=1,location=loc)
+              o=bpy.context.object; o.name=n; o.scale=scale
+              bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
+              if bev:
+                  md=o.modifiers.new("Arredondado","BEVEL"); md.width=bev; md.segments=4
+                  bpy.context.view_layer.objects.active=o
+                  bpy.ops.object.modifier_apply(modifier=md.name)
+              o.data.materials.append(mat); return o
+
+          def sphere(n,loc,scale,mat):
+              bpy.ops.mesh.primitive_uv_sphere_add(segments=28,ring_count=16,location=loc)
+              o=bpy.context.object; o.name=n; o.scale=scale
+              bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
+              o.data.materials.append(mat); return o
+
+          def cylinder(n,loc,radius,depth,mat,rot=(0,0,0)):
+              bpy.ops.mesh.primitive_cylinder_add(vertices=28,radius=radius,depth=depth,location=loc,rotation=rot)
+              o=bpy.context.object; o.name=n; o.data.materials.append(mat); return o
+
+          def limb_between(n,a,b,r,mat):
+              a=Vector(a); b=Vector(b); mid=(a+b)/2; d=b-a
+              bpy.ops.mesh.primitive_cylinder_add(vertices=28,radius=r,depth=d.length,location=mid)
+              o=bpy.context.object; o.name=n
+              o.rotation_mode='QUATERNION'; o.rotation_quaternion=d.to_track_quat('Z','Y')
+              o.data.materials.append(mat); return o
+
+          # Corpo central contínuo
+          pelvis_z=0.92
+          waist_z=1.13
+          torso_z=1.55
+          neck_z=1.98
+          head_z=2.30
+
+          sphere("Pelvis",(0,0,pelvis_z),(.235,.19,.19),WHITE)
+          cylinder("Waist",(0,0,waist_z),.145,.22,DARK)
+          sphere("Torso",(0,0,torso_z),(.30,.215,.50),WHITE)
+          cube("ChestPanel",(0,-.238,torso_z+.02),(.20,.022,.28),DARK,.045)
+          sphere("ChestCore",(0,-.265,torso_z+.03),(.075,.022,.18),CYAN)
+          cylinder("Neck",(0,0,neck_z),.13,.20,DARK)
+
+          # Cabeça arredondada e visor profundo
+          sphere("HeadShell",(0,0,head_z),(.49,.33,.32),WHITE)
+          cube("FaceVisor",(0,-.318,head_z),(.38,.032,.15),BLACK,.09)
+          sphere("EyeL",(-.17,-.352,head_z+.01),(.065,.023,.065),CYAN)
+          sphere("EyeR",(.17,-.352,head_z+.01),(.065,.023,.065),CYAN)
+          for x in (-1,1):
+              cylinder("Ear",(.485*x,0,head_z),.07,.075,DARK,(0,math.radians(90),0))
+              cylinder("Antenna",(.31*x,0,2.68),.025,.25,DARK)
+              sphere("AntennaLight",(.31*x,0,2.82),(.065,.065,.065),CYAN)
+
+          # Braços construídos por pontos conectados
+          for x in (-1,1):
+              shoulder=(.36*x,0,1.72)
+              elbow=(.44*x,0,1.32)
+              wrist=(.45*x,0,.93)
+              hand=(.45*x,0,.79)
+              sphere("Shoulder",shoulder,(.13,.13,.13),WHITE)
+              limb_between("UpperArm",shoulder,elbow,.078,WHITE)
+              sphere("ElbowCore",elbow,(.105,.105,.105),DARK)
+              cylinder("ElbowRing",elbow,.125,.08,CYAN,(math.radians(90),0,0))
+              limb_between("Forearm",elbow,wrist,.082,WHITE)
+              sphere("Wrist",wrist,(.07,.07,.07),DARK)
+              cube("Palm",hand,(.09,.075,.10),DARK,.04)
+              # alicate curvo simplificado, conectado à palma
+              cube("ClawA",(.45*x,-.052,.665),(.042,.030,.115),WHITE,.028)
+              cube("ClawB",(.45*x,.052,.665),(.042,.030,.115),WHITE,.028)
+
+          # Pernas construídas por pontos conectados
+          for x in (-1,1):
+              hip=(.17*x,0,.78)
+              knee=(.17*x,0,.28)
+              ankle=(.17*x,0,-.23)
+              sphere("Hip",hip,(.12,.12,.12),DARK)
+              limb_between("Thigh",hip,knee,.105,WHITE)
+              sphere("KneeCore",knee,(.12,.12,.12),DARK)
+              cylinder("KneeRing",knee,.14,.085,CYAN,(math.radians(90),0,0))
+              limb_between("Shin",knee,ankle,.105,WHITE)
+              sphere("Ankle",ankle,(.075,.075,.075),DARK)
+              cube("Foot",(.17*x,-.075,-.35),(.15,.215,.105),WHITE,.07)
+              cube("FootLight",(.17*x,-.278,-.35),(.085,.018,.028),CYAN,.012)
+
+
+          # ----------------------------------------------------------
+          # ANIMACOES: preserva geometria V10.8.2 e anima objetos
+          # ----------------------------------------------------------
+          def objs(prefixes):
+              return [o for o in bpy.context.scene.objects if any(o.name.startswith(p) for p in prefixes)]
+
+          def set_interp(action):
+              if action:
+                  for fc in action.fcurves:
+                      for kp in fc.keyframe_points:
+                          kp.interpolation='BEZIER'
+
+          def key_obj(o,frame,loc=None,rot=None,scale=None):
+              if loc is not None:
+                  o.location=loc; o.keyframe_insert(data_path="location",frame=frame)
+              if rot is not None:
+                  o.rotation_mode='XYZ'; o.rotation_euler=rot; o.keyframe_insert(data_path="rotation_euler",frame=frame)
+              if scale is not None:
+                  o.scale=scale; o.keyframe_insert(data_path="scale",frame=frame)
+
+          # Root vazio: permite movimentos do personagem inteiro no app/Blender
+          bpy.ops.object.empty_add(type='PLAIN_AXES',location=(0,0,0))
+          root=bpy.context.object; root.name="JARVES_ROOT"
+          for o in list(bpy.context.scene.objects):
+              if o != root and o.parent is None:
+                  o.parent=root
+
+          # IDLE: leve balanco do corpo inteiro (frames 1-60)
+          root.rotation_mode='XYZ'
+          key_obj(root,1,rot=(0,0,math.radians(-1.2)))
+          key_obj(root,30,rot=(0,0,math.radians(1.2)))
+          key_obj(root,60,rot=(0,0,math.radians(-1.2)))
+          idle=root.animation_data.action if root.animation_data else None
+          if idle: idle.name="Idle"
+          set_interp(idle)
+
+          # Criar NLA do Idle para preservar clip
+          if idle:
+              root.animation_data_create()
+              tr=root.animation_data.nla_tracks.new(); tr.name="Idle"
+              st=tr.strips.new("Idle",1,idle)
+              root.animation_data.action=None
+
+          # WAVE: braço direito levanta/acena (frames 70-120)
+          armR=objs(["Shoulder.001","UpperArm.001","ElbowCore.001","ElbowRing.001","Forearm.001","Wrist.001","Palm.001","ClawA.001","ClawB.001"])
+          # cria um pivô no ombro direito e parenta peças do braço direito
+          bpy.ops.object.empty_add(type='PLAIN_AXES',location=(.36,0,1.72))
+          wave=bpy.context.object; wave.name="Wave_R"
+          wave.parent=root
+          for o in armR:
+              if o != wave: o.parent=wave
+          key_obj(wave,70,rot=(0,0,0))
+          key_obj(wave,82,rot=(0,math.radians(-15),math.radians(-115)))
+          key_obj(wave,94,rot=(0,math.radians(15),math.radians(-100)))
+          key_obj(wave,106,rot=(0,math.radians(-15),math.radians(-115)))
+          key_obj(wave,120,rot=(0,0,0))
+          wa=wave.animation_data.action if wave.animation_data else None
+          if wa: wa.name="Wave"
+          set_interp(wa)
+          if wa:
+              tr=wave.animation_data.nla_tracks.new(); tr.name="Wave"
+              tr.strips.new("Wave",70,wa); wave.animation_data.action=None
+
+          # WALK: oscilacao alternada de pernas/bracos (frames 130-170)
+          left_leg=objs(["Thigh","KneeCore","KneeRing","Shin","Ankle","Foot","FootLight"])
+          # objetos .001 sao lado direito; sem sufixo lado esquerdo
+          bpy.ops.object.empty_add(type='PLAIN_AXES',location=(-.17,0,.78))
+          legL=bpy.context.object; legL.name="Leg_L_CTRL"; legL.parent=root
+          for o in left_leg:
+              if not o.name.endswith(".001") and o.parent==root: o.parent=legL
+          bpy.ops.object.empty_add(type='PLAIN_AXES',location=(.17,0,.78))
+          legR=bpy.context.object; legR.name="Leg_R_CTRL"; legR.parent=root
+          for o in bpy.context.scene.objects:
+              if o.name.startswith(("Thigh.001","KneeCore.001","KneeRing.001","Shin.001","Ankle.001","Foot.001","FootLight.001")) and o.parent==root:
+                  o.parent=legR
+          for f,a in [(130,18),(140,-18),(150,18),(160,-18),(170,18)]:
+              key_obj(legL,f,rot=(math.radians(a),0,0))
+              key_obj(legR,f,rot=(math.radians(-a),0,0))
+          for ctrl,nm in [(legL,"Walk_L"),(legR,"Walk_R")]:
+              ac=ctrl.animation_data.action if ctrl.animation_data else None
+              if ac: ac.name=nm
+              set_interp(ac)
+              if ac:
+                  tr=ctrl.animation_data.nla_tracks.new(); tr.name=nm
+                  tr.strips.new(nm,130,ac); ctrl.animation_data.action=None
+
+          bpy.context.scene.frame_start=1
+          # REACOES extras: feliz, bravo, assustado, enjoado e esconder
+          # Cada reação usa o root para preservar integralmente a geometria aprovada.
+          for start, end, name, keys in [
+              (180,220,"Happy",[(180,(0,0,0),(0,0,0)),(190,(0,0,.10),(0,0,math.radians(-5))),(200,(0,0,0),(0,0,math.radians(5))),(210,(0,0,.10),(0,0,math.radians(-5))),(220,(0,0,0),(0,0,0))]),
+              (230,270,"Angry",[(230,(0,0,0),(0,0,0)),(240,(0,0,-.06),(math.radians(4),0,math.radians(-3))),(250,(0,0,-.06),(math.radians(4),0,math.radians(3))),(270,(0,0,0),(0,0,0))]),
+              (280,320,"Scared",[(280,(0,0,0),(0,0,0)),(290,(0,0,.12),(math.radians(-5),0,0)),(300,(0,0,.02),(math.radians(5),0,0)),(320,(0,0,0),(0,0,0))]),
+              (330,380,"Dizzy",[(330,(0,0,0),(0,0,0)),(340,(0,0,0),(0,0,math.radians(-8))),(350,(0,0,0),(0,0,math.radians(8))),(360,(0,0,0),(0,0,math.radians(-8))),(370,(0,0,0),(0,0,math.radians(8))),(380,(0,0,0),(0,0,0))]),
+              (390,430,"Hide",[(390,(0,0,0),(0,0,0)),(410,(1.0,0,0),(0,0,0)),(430,(1.45,0,0),(0,0,0))])
+          ]:
+              # action independente no root
+              root.animation_data_create()
+              root.animation_data.action=bpy.data.actions.new(name)
+              for f,loc,rot in keys:
+                  key_obj(root,f,loc=loc,rot=rot)
+              ac=root.animation_data.action; ac.name=name; set_interp(ac)
+              tr=root.animation_data.nla_tracks.new(); tr.name=name
+              tr.strips.new(name,start,ac); root.animation_data.action=None
+
+          bpy.context.scene.frame_end=430
+
+          out=os.path.join(os.environ["GITHUB_WORKSPACE"],"modelo3d","jarves_v10_9_1.glb")
+          bpy.ops.object.select_all(action='SELECT')
+          bpy.ops.export_scene.gltf(filepath=out,export_format='GLB',export_animations=True,export_apply=True)
+          if not os.path.isfile(out) or os.path.getsize(out)==0:
+              raise RuntimeError("GLB nao criado")
+          print("GLB CRIADO:",out,os.path.getsize(out))
+          PY
+
+          blender -b --python /tmp/jarves_v1091.py
+          test -s "$GITHUB_WORKSPACE/modelo3d/jarves_v10_9_1.glb"
+
+      - name: Publicar GLB
+        uses: actions/upload-artifact@v4
+        with:
+          name: JARVES-3D-V10-9-1-REACOES-GLB
+          path: modelo3d/jarves_v10_9_1.glb
+          if-no-files-found: error
