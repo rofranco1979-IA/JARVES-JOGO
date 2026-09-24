@@ -107,4 +107,3 @@ jobs:
         with:
           name: JARVES-3D-V10-7-1-REMODELADO-GLB
           path: modelo3d/jarves_v10_7_1_remodelado.glb
-
