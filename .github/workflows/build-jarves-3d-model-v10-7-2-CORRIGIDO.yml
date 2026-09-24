@@ -1,0 +1,112 @@
+name: Gerar Modelo 3D JARVES V10.7.2 CORRIGIDO
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-model:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender
+
+      - name: Criar modelo
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/modelo3d"
+          cat > /tmp/jarves.py <<'PY'
+          import bpy, math, os
+          bpy.ops.object.select_all(action='SELECT')
+          bpy.ops.object.delete(use_global=False)
+
+          def material(nome, cor, metal=.4, rough=.22):
+              m=bpy.data.materials.new(nome)
+              m.diffuse_color=(*cor,1)
+              m.use_nodes=True
+              b=m.node_tree.nodes.get("Principled BSDF")
+              b.inputs["Base Color"].default_value=(*cor,1)
+              b.inputs["Metallic"].default_value=metal
+              b.inputs["Roughness"].default_value=rough
+              return m
+
+          W=material("Branco",(.82,.88,.92),.55,.18)
+          D=material("Juntas",(.025,.04,.055),.7,.2)
+          B=material("Visor",(.008,.015,.022),.72,.12)
+          C=material("Cyan",(0,.55,.95),.25,.12)
+
+          def cube(n,l,s,m,b=.06,r=(0,0,0)):
+              bpy.ops.mesh.primitive_cube_add(size=1,location=l,rotation=r)
+              o=bpy.context.object; o.name=n; o.scale=s
+              bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
+              if b:
+                  md=o.modifiers.new("Round","BEVEL"); md.width=b; md.segments=3
+                  bpy.context.view_layer.objects.active=o
+                  bpy.ops.object.modifier_apply(modifier=md.name)
+              o.data.materials.append(m)
+
+          def sph(n,l,s,m):
+              bpy.ops.mesh.primitive_uv_sphere_add(segments=20,ring_count=10,location=l)
+              o=bpy.context.object; o.name=n; o.scale=s
+              bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
+              o.data.materials.append(m)
+
+          def cyl(n,l,rad,dep,m,r=(0,0,0)):
+              bpy.ops.mesh.primitive_cylinder_add(vertices=20,radius=rad,depth=dep,location=l,rotation=r)
+              o=bpy.context.object; o.name=n; o.data.materials.append(m)
+
+          # cabeça menor + orelhas pequenas
+          cube("Head",(0,0,2.42),(.54,.34,.35),W,.18)
+          cube("Visor",(0,-.345,2.43),(.43,.035,.16),B,.08)
+          sph("EyeL",(-.19,-.385,2.44),(.065,.025,.065),C)
+          sph("EyeR",(.19,-.385,2.44),(.065,.025,.065),C)
+
+          for x in (-1,1):
+              cyl("Ear",(.565*x,0,2.43),.065,.055,D,(0,math.radians(90),0))
+              cyl("Antenna",(.32*x,0,2.85),.026,.22,D)
+              sph("AntennaLight",(.32*x,0,2.99),(.065,.065,.065),C)
+
+          cyl("Neck",(0,0,1.98),.11,.16,D)
+          cube("Torso",(0,0,1.56),(.37,.25,.43),W,.15)
+          sph("Core",(0,-.295,1.61),(.10,.025,.13),C)
+          cube("Waist",(0,0,1.10),(.27,.21,.10),D,.05)
+
+          # braços mais finos + mãos alicate
+          for x in (-1,1):
+              sph("Shoulder",(.49*x,0,1.70),(.15,.15,.15),W)
+              cyl("UpperArm",(.58*x,0,1.39),.09,.40,W)
+              sph("Elbow",(.58*x,0,1.14),(.10,.10,.10),C)
+              cyl("Forearm",(.58*x,0,.89),.095,.36,W)
+              cube("Palm",(.58*x,0,.62),(.09,.085,.10),D,.035)
+              cube("Claw1",(.58*x,-.075,.43),(.05,.04,.18),W,.03)
+              cube("Claw2",(.58*x,.075,.43),(.05,.04,.18),W,.03)
+
+          cube("Pelvis",(0,0,.91),(.25,.20,.17),W,.08)
+          for x in (-1,1):
+              sph("Hip",(.20*x,0,.72),(.12,.12,.12),D)
+              cyl("Leg",(.20*x,0,.15),.12,.92,W)
+              cube("Foot",(.20*x,-.06,-.34),(.15,.22,.09),W,.04)
+
+          out=os.path.join(os.environ["GITHUB_WORKSPACE"],"modelo3d","jarves_v10_7_2_corrigido.glb")
+          bpy.ops.object.select_all(action='SELECT')
+          bpy.ops.export_scene.gltf(filepath=out,export_format='GLB',export_animations=False,export_apply=True)
+          if not os.path.isfile(out) or os.path.getsize(out) == 0:
+              raise RuntimeError("GLB nao foi criado: " + out)
+          print("GLB CRIADO:", out, os.path.getsize(out), "bytes")
+          PY
+          blender -b --python /tmp/jarves.py
+          test -s "$GITHUB_WORKSPACE/modelo3d/jarves_v10_7_2_corrigido.glb"
+
+      - name: Verificar GLB
+        run: |
+          ls -lh "$GITHUB_WORKSPACE/modelo3d/jarves_v10_7_2_corrigido.glb"
+          test -s "$GITHUB_WORKSPACE/modelo3d/jarves_v10_7_2_corrigido.glb"
+
+      - name: Publicar GLB
+        uses: actions/upload-artifact@v4
+        with:
+          name: JARVES-3D-V10-7-2-CORRIGIDO-GLB
+          path: modelo3d/jarves_v10_7_2_corrigido.glb
+          if-no-files-found: error
