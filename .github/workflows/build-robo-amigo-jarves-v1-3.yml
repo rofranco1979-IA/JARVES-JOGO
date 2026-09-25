@@ -1,0 +1,371 @@
+name: Gerar APK ROBO AMIGO JARVES V1.3 - GLB V10.8.2 360
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Instalar Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender python3-numpy
+          BLENDER_PY="/usr/bin/4.0/python/bin/python3.12"
+          if [ -x "$BLENDER_PY" ]; then
+            "$BLENDER_PY" -m ensurepip --upgrade || true
+            "$BLENDER_PY" -m pip install --upgrade numpy
+          fi
+
+      - name: Construir JARVES
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/modelo3d"
+          cat > /tmp/jarves_v1082.py <<'PY'
+          import bpy, math, os
+          from mathutils import Vector
+
+          bpy.ops.object.select_all(action='SELECT')
+          bpy.ops.object.delete(use_global=False)
+
+          def material(nome, cor, metal=.45, rough=.18):
+              m=bpy.data.materials.new(nome)
+              m.diffuse_color=(*cor,1)
+              m.use_nodes=True
+              p=m.node_tree.nodes.get("Principled BSDF")
+              p.inputs["Base Color"].default_value=(*cor,1)
+              p.inputs["Metallic"].default_value=metal
+              p.inputs["Roughness"].default_value=rough
+              return m
+
+          WHITE=material("Armadura branca",(.80,.87,.92),.58,.16)
+          DARK=material("Juntas",(.018,.03,.045),.75,.15)
+          BLACK=material("Visor",(.004,.009,.016),.80,.09)
+          CYAN=material("Luzes cyan",(0,.55,1.0),.30,.10)
+
+          def cube(n,loc,scale,mat,bev=.05):
+              bpy.ops.mesh.primitive_cube_add(size=1,location=loc)
+              o=bpy.context.object; o.name=n; o.scale=scale
+              bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
+              if bev:
+                  md=o.modifiers.new("Arredondado","BEVEL"); md.width=bev; md.segments=4
+                  bpy.context.view_layer.objects.active=o
+                  bpy.ops.object.modifier_apply(modifier=md.name)
+              o.data.materials.append(mat); return o
+
+          def sphere(n,loc,scale,mat):
+              bpy.ops.mesh.primitive_uv_sphere_add(segments=28,ring_count=16,location=loc)
+              o=bpy.context.object; o.name=n; o.scale=scale
+              bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
+              o.data.materials.append(mat); return o
+
+          def cylinder(n,loc,radius,depth,mat,rot=(0,0,0)):
+              bpy.ops.mesh.primitive_cylinder_add(vertices=28,radius=radius,depth=depth,location=loc,rotation=rot)
+              o=bpy.context.object; o.name=n; o.data.materials.append(mat); return o
+
+          def limb_between(n,a,b,r,mat):
+              a=Vector(a); b=Vector(b); mid=(a+b)/2; d=b-a
+              bpy.ops.mesh.primitive_cylinder_add(vertices=28,radius=r,depth=d.length,location=mid)
+              o=bpy.context.object; o.name=n
+              o.rotation_mode='QUATERNION'; o.rotation_quaternion=d.to_track_quat('Z','Y')
+              o.data.materials.append(mat); return o
+
+          # Corpo central contínuo
+          pelvis_z=0.92
+          waist_z=1.13
+          torso_z=1.55
+          neck_z=1.98
+          head_z=2.30
+
+          sphere("Pelvis",(0,0,pelvis_z),(.235,.19,.19),WHITE)
+          cylinder("Waist",(0,0,waist_z),.145,.22,DARK)
+          sphere("Torso",(0,0,torso_z),(.30,.215,.50),WHITE)
+          cube("ChestPanel",(0,-.238,torso_z+.02),(.20,.022,.28),DARK,.045)
+          sphere("ChestCore",(0,-.265,torso_z+.03),(.075,.022,.18),CYAN)
+          cylinder("Neck",(0,0,neck_z),.13,.20,DARK)
+
+          # Cabeça arredondada e visor profundo
+          sphere("HeadShell",(0,0,head_z),(.49,.33,.32),WHITE)
+          cube("FaceVisor",(0,-.318,head_z),(.38,.032,.15),BLACK,.09)
+          sphere("EyeL",(-.17,-.352,head_z+.01),(.065,.023,.065),CYAN)
+          sphere("EyeR",(.17,-.352,head_z+.01),(.065,.023,.065),CYAN)
+          for x in (-1,1):
+              cylinder("Ear",(.485*x,0,head_z),.07,.075,DARK,(0,math.radians(90),0))
+              cylinder("Antenna",(.31*x,0,2.68),.025,.25,DARK)
+              sphere("AntennaLight",(.31*x,0,2.82),(.065,.065,.065),CYAN)
+
+          # Braços construídos por pontos conectados
+          for x in (-1,1):
+              shoulder=(.36*x,0,1.72)
+              elbow=(.44*x,0,1.32)
+              wrist=(.45*x,0,.93)
+              hand=(.45*x,0,.79)
+              sphere("Shoulder",shoulder,(.13,.13,.13),WHITE)
+              limb_between("UpperArm",shoulder,elbow,.078,WHITE)
+              sphere("ElbowCore",elbow,(.105,.105,.105),DARK)
+              cylinder("ElbowRing",elbow,.125,.08,CYAN,(math.radians(90),0,0))
+              limb_between("Forearm",elbow,wrist,.082,WHITE)
+              sphere("Wrist",wrist,(.07,.07,.07),DARK)
+              cube("Palm",hand,(.09,.075,.10),DARK,.04)
+              # alicate curvo simplificado, conectado à palma
+              cube("ClawA",(.45*x,-.052,.665),(.042,.030,.115),WHITE,.028)
+              cube("ClawB",(.45*x,.052,.665),(.042,.030,.115),WHITE,.028)
+
+          # Pernas construídas por pontos conectados
+          for x in (-1,1):
+              hip=(.17*x,0,.78)
+              knee=(.17*x,0,.28)
+              ankle=(.17*x,0,-.23)
+              sphere("Hip",hip,(.12,.12,.12),DARK)
+              limb_between("Thigh",hip,knee,.105,WHITE)
+              sphere("KneeCore",knee,(.12,.12,.12),DARK)
+              cylinder("KneeRing",knee,.14,.085,CYAN,(math.radians(90),0,0))
+              limb_between("Shin",knee,ankle,.105,WHITE)
+              sphere("Ankle",ankle,(.075,.075,.075),DARK)
+              cube("Foot",(.17*x,-.075,-.35),(.15,.215,.105),WHITE,.07)
+              cube("FootLight",(.17*x,-.278,-.35),(.085,.018,.028),CYAN,.012)
+
+          out=os.path.join(os.environ["GITHUB_WORKSPACE"],"modelo3d","jarves_v10_8_2.glb")
+          bpy.ops.object.select_all(action='SELECT')
+          bpy.ops.export_scene.gltf(filepath=out,export_format='GLB',export_animations=False,export_apply=True)
+          if not os.path.isfile(out) or os.path.getsize(out)==0:
+              raise RuntimeError("GLB nao criado")
+          print("GLB CRIADO:",out,os.path.getsize(out))
+          PY
+
+          blender -b --python /tmp/jarves_v1082.py
+          test -s "$GITHUB_WORKSPACE/modelo3d/jarves_v10_8_2.glb"
+
+      - name: Integrar GLB V10.8.2 no aplicativo
+        run: |
+          mkdir -p app/src/main/assets
+          cp "$GITHUB_WORKSPACE/modelo3d/jarves_v10_8_2.glb" app/src/main/assets/jarves.glb
+          test -s app/src/main/assets/jarves.glb
+
+      - name: Criar projeto Android Robo Amigo JARVES V1.3
+        run: |
+          mkdir -p app/src/main/java/com/roboamigo/jarves app/src/main/res/values
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          rootProject.name="JARVES-JOGO"
+          include ":app"
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins {
+            id "com.android.application" version "8.7.3" apply false
+          }
+          EOF
+
+          cat > app/build.gradle <<'EOF'
+          plugins { id "com.android.application" }
+          android {
+            namespace "com.roboamigo.jarves"
+            compileSdk 35
+            defaultConfig {
+              applicationId "com.roboamigo.jarves"
+              minSdk 26
+              targetSdk 35
+              versionCode 103
+              versionName "1.3"
+            }
+          }
+          EOF
+
+          cat > app/src/main/res/values/styles.xml <<'EOF'
+          <resources>
+            <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+              <item name="android:fontFamily">sans</item>
+              <item name="android:windowNoTitle">true</item>
+              <item name="android:statusBarColor">#000000</item>
+              <item name="android:navigationBarColor">#000000</item>
+            </style>
+          </resources>
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <uses-permission android:name="android.permission.INTERNET"/>
+            <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+            <application android:theme="@style/AppTheme" android:label="Robô Amigo JARVES" android:usesCleartextTraffic="true">
+              <activity android:name=".MainActivity" android:screenOrientation="portrait" android:exported="true">
+                <intent-filter>
+                  <action android:name="android.intent.action.MAIN"/>
+                  <category android:name="android.intent.category.LAUNCHER"/>
+                </intent-filter>
+              </activity>
+            </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/assets/jarves.html <<'EOF'
+          <!doctype html>
+          <html>
+          <head>
+            <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+            <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+            <style>
+              html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
+              model-viewer{width:100%;height:100%;background:transparent;--poster-color:transparent}
+            </style>
+          </head>
+          <body>
+            <model-viewer id="j" src="jarves.glb" camera-controls disable-zoom
+              interaction-prompt="none" shadow-intensity="1" exposure="1.05"
+              camera-orbit="0deg 82deg 4.6m" autoplay></model-viewer>
+            <script>
+              const j=document.getElementById('j');
+              window.playJarves=function(n){
+                if(!j.availableAnimations || !j.availableAnimations.includes(n)) return false;
+                j.pause(); j.animationName=n; j.currentTime=0; j.play({repetitions:1}); return true;
+              }
+              window.jarvesAnimations=function(){ return JSON.stringify(j.availableAnimations||[]); }
+            </script>
+          </body>
+          </html>
+          EOF
+
+          cat > app/src/main/java/com/roboamigo/jarves/MainActivity.java <<'EOF'
+          package com.roboamigo.jarves;
+
+          import android.Manifest;
+          import android.app.Activity;
+          import android.os.*;
+          import android.content.pm.PackageManager;
+          import android.graphics.Color;
+          import android.view.*;
+          import android.webkit.*;
+          import android.widget.*;
+          import android.speech.*;
+          import android.content.Intent;
+          import java.util.*;
+
+          public class MainActivity extends Activity {
+            WebView web;
+            TextView status;
+            SpeechRecognizer sr;
+            Handler h=new Handler(Looper.getMainLooper());
+            int taps=0; long longTapWindow=0;
+
+            @Override public void onCreate(Bundle b){
+              super.onCreate(b);
+              FrameLayout root=new FrameLayout(this);
+              root.setBackgroundColor(Color.rgb(10,12,16));
+
+              web=new WebView(this);
+              web.setBackgroundColor(Color.TRANSPARENT);
+              web.getSettings().setJavaScriptEnabled(true);
+              web.getSettings().setAllowFileAccess(true);
+              web.getSettings().setDomStorageEnabled(true);
+              web.setWebViewClient(new WebViewClient());
+              root.addView(web,new FrameLayout.LayoutParams(-1,-1));
+
+              status=new TextView(this);
+              status.setText("Robô Amigo JARVES V1.3 • GLB V10.8.2");
+              status.setTextColor(Color.WHITE);
+              status.setTextSize(14);
+              status.setPadding(20,20,20,20);
+              FrameLayout.LayoutParams sp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);
+              root.addView(status,sp);
+
+              Button mic=new Button(this); mic.setText("🎤 FALAR");
+              FrameLayout.LayoutParams mp=new FrameLayout.LayoutParams(-2,-2,Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
+              mp.bottomMargin=35; root.addView(mic,mp);
+
+              setContentView(root);
+              web.loadUrl("file:///android_asset/jarves.html");
+
+              web.setOnClickListener(v->toque());
+              mic.setOnClickListener(v->ouvir());
+
+              if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)
+                requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},10);
+
+              h.postDelayed(()->anim("Idle"),2500);
+            }
+
+            void anim(String n){
+              web.evaluateJavascript("playJarves("+org.json.JSONObject.quote(n)+")",null);
+              status.setText("JARVES • "+n);
+            }
+
+            void toque(){
+              long now=System.currentTimeMillis();
+              if(now-longTapWindow>900)taps=0;
+              longTapWindow=now; taps++;
+              h.postDelayed(()->{
+                int t=taps; taps=0;
+                if(t==1){ anim("Listening"); falar("Oi?"); ouvir(); }
+                else if(t==2){ anim("Happy"); falar("He he! Gostei."); }
+                else { anim("Flee"); falar("Ai ai ai. Para, está me machucando!"); }
+              },350);
+            }
+
+            void ouvir(){
+              if(!SpeechRecognizer.isRecognitionAvailable(this))return;
+              if(sr!=null) sr.destroy();
+              sr=SpeechRecognizer.createSpeechRecognizer(this);
+              sr.setRecognitionListener(new RecognitionListener(){
+                public void onReadyForSpeech(Bundle b){anim("Listening");}
+                public void onResults(Bundle b){
+                  ArrayList<String> a=b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                  if(a!=null&&!a.isEmpty()) comando(a.get(0).toLowerCase(Locale.ROOT));
+                }
+                public void onError(int e){anim("Idle");}
+                public void onBeginningOfSpeech(){} public void onRmsChanged(float x){}
+                public void onBufferReceived(byte[] x){} public void onEndOfSpeech(){}
+                public void onPartialResults(Bundle b){} public void onEvent(int t,Bundle b){}
+              });
+              Intent i=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+              i.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"pt-BR");
+              i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+              sr.startListening(i);
+            }
+
+            void comando(String s){
+              if(s.contains("feliz")){anim("Happy");falar("Oba! Eu estou feliz!");}
+              else if(s.contains("esconde")){anim("Hide");falar("Vou me esconder.");}
+              else if(s.contains("onde voce")||s.contains("onde você")||s.contains("volta")||s.contains("voltar")){
+                anim("ComeBack");falar("Estou aqui!");
+              } else if(s.contains("jarves")){anim("Listening");falar("Pode falar.");}
+              else {anim("Idle");falar("Entendi.");}
+            }
+
+            void falar(String s){
+              status.setText(s);
+              Toast.makeText(this,s,Toast.LENGTH_SHORT).show();
+            }
+
+            @Override protected void onDestroy(){
+              if(sr!=null)sr.destroy();
+              if(web!=null)web.destroy();
+              super.onDestroy();
+            }
+          }
+          EOF
+
+      - name: Compilar APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Publicar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ROBO-AMIGO-JARVES-V1-3-GLB-V10-8-2-360-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
