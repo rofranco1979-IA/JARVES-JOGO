@@ -1,4 +1,4 @@
-name: Gerar APK JARVES JOGO V3.8.2 - ROBOS 50% MAIORES
+name: Testar recorte 3 personagens JARVES JOGO V3.8.2 + VISUAL V10.7.1
 
 on:
   workflow_dispatch:
@@ -2411,28 +2411,131 @@ jobs:
           ZXJyaWRlIHByb3RlY3RlZCB2b2lkIG9uRHJhdyhDYW52YXMgYyl7IHN1cGVyLm9uRHJhdyhjKTsg
           Qml0bWFwIGI9aW1nc1twZXJzb25hZ2VtXTsgaWYoYj09bnVsbClyZXR1cm47IGZsb2F0IHBhZD04
           KmdldFJlc291cmNlcygpLmdldERpc3BsYXlNZXRyaWNzKCkuZGVuc2l0eTsgUmVjdEYgZHN0PWZp
-          dChiLHBhZCxnZXRXaWR0aCgpLXBhZCxwYWQsZ2V0SGVpZ2h0KCktcGFkKTsgZmxvYXQgY3g9ZHN0
-          LmNlbnRlclgoKSxjeT1kc3QuY2VudGVyWSgpLGh3PWRzdC53aWR0aCgpKi43NWYsaGg9ZHN0Lmhl
-          aWdodCgpKi43NWY7IGRzdC5zZXQoY3gtaHcsY3ktaGgsY3graHcsY3kraGgpOyBwLnNldEFscGhh
-          KDI1NSk7IGMuZHJhd0JpdG1hcChiLG51bGwsZHN0LHApOyBpZihlc3RhZG89PU9VVklORE98fGVz
-          dGFkbz09RkFMQU5ETyl7IHAuc2V0U3R5bGUoUGFpbnQuU3R5bGUuU1RST0tFKTsgcC5zZXRTdHJv
-          a2VXaWR0aChNYXRoLm1heCg0LGdldFdpZHRoKCkqLjAxOGYpKTsgcC5zZXRDb2xvcihlc3RhZG89
-          PU9VVklORE8/Q29sb3IuQ1lBTjpDb2xvci5yZ2IoNzAsMTcwLDI1NSkpOyBwLnNldFNoYWRvd0xh
-          eWVyKDE4LDAsMCxwLmdldENvbG9yKCkpOyBjLmRyYXdSb3VuZFJlY3QoZHN0LDMwLDMwLHApOyBw
-          LmNsZWFyU2hhZG93TGF5ZXIoKTsgcC5zZXRTdHlsZShQYWludC5TdHlsZS5GSUxMKTsgfSB9CiBw
-          cml2YXRlIFJlY3RGIGZpdChCaXRtYXAgYixmbG9hdCBsLGZsb2F0IHIsZmxvYXQgdCxmbG9hdCBi
-          b3QpeyBmbG9hdCBhdz1yLWwsYWg9Ym90LXQsIHM9TWF0aC5taW4oYXcvYi5nZXRXaWR0aCgpLGFo
-          L2IuZ2V0SGVpZ2h0KCkpOyBmbG9hdCB3PWIuZ2V0V2lkdGgoKSpzLGg9Yi5nZXRIZWlnaHQoKSpz
-          OyBmbG9hdCB4PWwrKGF3LXcpLzJmLHk9dCsoYWgtaCkvMmY7IHJldHVybiBuZXcgUmVjdEYoeCx5
-          LHgrdyx5K2gpOyB9Cn0K
+          dChiLHBhZCxnZXRXaWR0aCgpLXBhZCxwYWQsZ2V0SGVpZ2h0KCktcGFkKTsgcC5zZXRBbHBoYSgy
+          NTUpOyBjLmRyYXdCaXRtYXAoYixudWxsLGRzdCxwKTsgaWYoZXN0YWRvPT1PVVZJTkRPfHxlc3Rh
+          ZG89PUZBTEFORE8peyBwLnNldFN0eWxlKFBhaW50LlN0eWxlLlNUUk9LRSk7IHAuc2V0U3Ryb2tl
+          V2lkdGgoTWF0aC5tYXgoNCxnZXRXaWR0aCgpKi4wMThmKSk7IHAuc2V0Q29sb3IoZXN0YWRvPT1P
+          VVZJTkRPP0NvbG9yLkNZQU46Q29sb3IucmdiKDcwLDE3MCwyNTUpKTsgcC5zZXRTaGFkb3dMYXll
+          cigxOCwwLDAscC5nZXRDb2xvcigpKTsgYy5kcmF3Um91bmRSZWN0KGRzdCwzMCwzMCxwKTsgcC5j
+          bGVhclNoYWRvd0xheWVyKCk7IHAuc2V0U3R5bGUoUGFpbnQuU3R5bGUuRklMTCk7IH0gfQogcHJp
+          dmF0ZSBSZWN0RiBmaXQoQml0bWFwIGIsZmxvYXQgbCxmbG9hdCByLGZsb2F0IHQsZmxvYXQgYm90
+          KXsgZmxvYXQgYXc9ci1sLGFoPWJvdC10LCBzPU1hdGgubWluKGF3L2IuZ2V0V2lkdGgoKSxhaC9i
+          LmdldEhlaWdodCgpKTsgZmxvYXQgdz1iLmdldFdpZHRoKCkqcyxoPWIuZ2V0SGVpZ2h0KCkqczsg
+          ZmxvYXQgeD1sKyhhdy13KS8yZix5PXQrKGFoLWgpLzJmOyByZXR1cm4gbmV3IFJlY3RGKHgseSx4
+          K3cseStoKTsgfQp9Cg==
           B64_VIEW
           base64 -d /tmp/jarvesview3d.b64 > app/src/main/java/com/jarves/jogo/JarvesView.java
-          sed -i 's/versionCode 9/versionCode 13/; s/versionName "3.6"/versionName "3.8.2"/' app/build.gradle
+          sed -i 's/versionCode 9/versionCode 12/; s/versionName "3.6"/versionName "3.8.1"/' app/build.gradle
           echo "JARVES + EXPLORER + BRANQUINHO incorporados."
+      - name: Renderizar JARVES V10.7.1 para o app
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender webp python3-pil libegl1 libgl1 libglx-mesa0 libx11-6 libxext6 libxi6 libxrender1
+          cat > /tmp/render_jarves_v10_7_1.py <<'PY'
+          import bpy, math
+          from mathutils import Vector
+          bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete(use_global=False)
+          def mat(name,color,metallic=.35,rough=.24,emission=None):
+              m=bpy.data.materials.new(name); m.diffuse_color=(*color,1); m.use_nodes=True
+              bs=m.node_tree.nodes.get('Principled BSDF'); bs.inputs['Base Color'].default_value=(*color,1)
+              bs.inputs['Metallic'].default_value=metallic; bs.inputs['Roughness'].default_value=rough
+              if emission:
+                  key='Emission' if 'Emission' in bs.inputs else 'Emission Color'
+                  if key in bs.inputs: bs.inputs[key].default_value=(*emission,1)
+              return m
+          WHITE=mat('Armadura branca',(.82,.88,.92),.55,.18); BLACK=mat('Preto brilhante',(.008,.015,.022),.72,.12)
+          DARK=mat('Juntas',(.025,.04,.055),.70,.20); CYAN=mat('Luz cyan',(0,.55,.95),.25,.12,(0,.75,1))
+          def cube(name,loc,scale,material,bevel=.08,rot=(0,0,0)):
+              bpy.ops.mesh.primitive_cube_add(size=1,location=loc,rotation=rot); o=bpy.context.object; o.name=name; o.scale=scale
+              bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
+              if bevel:
+                  md=o.modifiers.new('Rounded','BEVEL'); md.width=bevel; md.segments=4; bpy.context.view_layer.objects.active=o; bpy.ops.object.modifier_apply(modifier=md.name)
+              o.data.materials.append(material); return o
+          def sph(name,loc,scale,material):
+              bpy.ops.mesh.primitive_uv_sphere_add(segments=24,ring_count=12,location=loc); o=bpy.context.object; o.name=name; o.scale=scale
+              bpy.ops.object.transform_apply(location=False,rotation=False,scale=True); o.data.materials.append(material); return o
+          def cyl(name,loc,radius,depth,material,rot=(0,0,0)):
+              bpy.ops.mesh.primitive_cylinder_add(vertices=24,radius=radius,depth=depth,location=loc,rotation=rot); o=bpy.context.object; o.name=name; o.data.materials.append(material); return o
+          cube('Head',(0,0,2.48),(.62,.36,.39),WHITE,.20); cube('Visor',(0,-.365,2.48),(.49,.035,.19),BLACK,.10)
+          sph('EyeL',(-.22,-.407,2.50),(.07,.025,.07),CYAN); sph('EyeR',(.22,-.407,2.50),(.07,.025,.07),CYAN)
+          for x in (-1,1):
+              cyl('Ear',(.655*x,0,2.48),.095,.075,DARK,(0,math.radians(90),0)); cyl('EarLight',(.700*x,0,2.48),.065,.025,CYAN,(0,math.radians(90),0))
+              cyl('Antenna',(.39*x,0,2.98),.032,.27,DARK); sph('AntennaLight',(.39*x,0,3.14),(.075,.075,.075),CYAN)
+          cyl('Neck',(0,0,1.98),.14,.18,DARK); cube('Torso',(0,0,1.55),(.43,.27,.48),WHITE,.17)
+          sph('ChestCore',(0,-.325,1.62),(.145,.035,.145),DARK); sph('ChestGlow',(0,-.365,1.62),(.105,.020,.105),CYAN)
+          cube('Waist',(0,0,1.08),(.31,.24,.11),DARK,.055); cube('Pelvis',(0,0,.88),(.29,.22,.20),WHITE,.10)
+          for x in (-1,1):
+              sph('Shoulder',(.57*x,0,1.72),(.18,.18,.18),WHITE); cyl('UpperArm',(.66*x,0,1.39),.115,.43,WHITE)
+              sph('Elbow',(.66*x,0,1.13),(.12,.12,.12),CYAN); cyl('Forearm',(.66*x,0,.86),.125,.40,WHITE)
+              cube('Palm',(.66*x,0,.51),(.12,.10,.11),DARK,.045)
+              cube('ClawA',(.66*x,-.105,.32),(.075,.055,.22),WHITE,.045,(math.radians(-10),0,math.radians(-10*x)))
+              cube('ClawB',(.66*x,.105,.32),(.075,.055,.22),WHITE,.045,(math.radians(10),0,math.radians(10*x)))
+          for x in (-1,1):
+              sph('Hip',(.22*x,0,.72),(.15,.15,.15),DARK); cube('Thigh',(.22*x,0,.38),(.14,.16,.30),WHITE,.08)
+              cube('Shin',(.22*x,0,-.25),(.15,.17,.31),WHITE,.07); cube('Foot',(.22*x,-.055,-.61),(.18,.28,.10),WHITE,.055)
+          def look(obj,pt): obj.rotation_euler=(Vector(pt)-obj.location).to_track_quat('-Z','Y').to_euler()
+          bpy.ops.object.camera_add(location=(0,-8.2,1.25)); cam=bpy.context.object; cam.data.type='ORTHO'; cam.data.ortho_scale=4.45; look(cam,(0,0,1.25)); bpy.context.scene.camera=cam
+          bpy.ops.object.light_add(type='AREA',location=(-3,-4,5)); bpy.context.object.data.energy=850; bpy.context.object.data.size=5; look(bpy.context.object,(0,0,1.2))
+          bpy.ops.object.light_add(type='AREA',location=(3,-2,3)); bpy.context.object.data.energy=650; bpy.context.object.data.size=4; look(bpy.context.object,(0,0,1.2))
+          bpy.ops.object.light_add(type='AREA',location=(0,2,4)); bpy.context.object.data.energy=500; bpy.context.object.data.size=3; look(bpy.context.object,(0,0,1.5))
+          sc=bpy.context.scene; sc.render.engine='BLENDER_EEVEE'; sc.render.resolution_x=512; sc.render.resolution_y=672; sc.render.resolution_percentage=100
+          sc.render.image_settings.file_format='PNG'; sc.render.image_settings.color_mode='RGBA'; sc.render.film_transparent=True; sc.render.filepath='/tmp/jarves_v10_7_1.png'
+          sc.view_settings.view_transform='Standard'; sc.view_settings.look='Medium High Contrast'; bpy.ops.render.render(write_still=True)
+          PY
+          blender -b --python /tmp/render_jarves_v10_7_1.py
+          test -s /tmp/jarves_v10_7_1.png
+          rm -f app/src/main/res/drawable*/jarves.webp app/src/main/res/drawable*/jarves.png
+          mkdir -p app/src/main/res/drawable-nodpi
+          cwebp -quiet -q 94 /tmp/jarves_v10_7_1.png -o app/src/main/res/drawable-nodpi/jarves.webp
+          test -s app/src/main/res/drawable-nodpi/jarves.webp
+          echo 'Visual JARVES V10.7.1 aplicado; Explorer e Branquinho preservados.'
+      - name: Gerar teste visual dos 3 personagens
+        run: |
+          mkdir -p teste-recorte
+          python3 - <<'PYRECORTE'
+          from PIL import Image, ImageDraw, ImageFont
+          from pathlib import Path
+
+          nomes = [('JARVES','jarves.webp'), ('EXPLORER','explorer.webp'), ('BRANQUINHO','branquinho.webp')]
+          W,H = 620,820
+          cellw = W//3
+          bg = Image.new('RGBA',(W,H),(28,28,32,255))
+          d = ImageDraw.Draw(bg)
+          # xadrez para deixar a transparência evidente
+          sq=20
+          for y in range(0,H,sq):
+              for x in range(0,W,sq):
+                  c=(65,65,70,255) if ((x//sq+y//sq)%2==0) else (95,95,100,255)
+                  d.rectangle((x,y,x+sq-1,y+sq-1),fill=c)
+          for i,(label,fn) in enumerate(nomes):
+              p=Path('app/src/main/res/drawable-nodpi')/fn
+              im=Image.open(p).convert('RGBA')
+              alpha=im.getchannel('A')
+              box=alpha.getbbox()
+              if box:
+                  crop=im.crop(box)
+                  margin=18
+                  maxw=cellw-2*margin; maxh=H-120
+                  scale=min(maxw/crop.width,maxh/crop.height)
+                  crop=crop.resize((max(1,int(crop.width*scale)),max(1,int(crop.height*scale))),Image.Resampling.LANCZOS)
+                  x=i*cellw+(cellw-crop.width)//2; y=70+(H-100-crop.height)//2
+                  bg.alpha_composite(crop,(x,y))
+                  d.rectangle((i*cellw+3,55,(i+1)*cellw-4,H-8),outline=(255,255,255,210),width=2)
+                  d.text((i*cellw+12,16),label,fill=(255,255,255,255))
+                  d.text((i*cellw+12,H-42),f'alpha bbox: {box}',fill=(255,255,255,255))
+              else:
+                  d.text((i*cellw+12,100),'SEM CONTEUDO VISIVEL',fill=(255,255,255,255))
+          bg.save('teste-recorte/JARVES-JOGO-V3-8-2-TESTE-RECORTE-3-PERSONAGENS.png')
+          PYRECORTE
+      - name: Enviar teste de recorte
+        uses: actions/upload-artifact@v4
+        with:
+          name: JARVES-JOGO-V3-8-2-TESTE-RECORTE-3-PERSONAGENS
+          path: teste-recorte/JARVES-JOGO-V3-8-2-TESTE-RECORTE-3-PERSONAGENS.png
       - name: Compilar APK
         run: gradle :app:assembleDebug --stacktrace
       - name: Enviar APK
         uses: actions/upload-artifact@v4
         with:
-          name: JARVES-JOGO-V3-8-2-APK
+          name: JARVES-JOGO-V3-8-2-VISUAL-V10-7-1-APK
           path: app/build/outputs/apk/debug/app-debug.apk
